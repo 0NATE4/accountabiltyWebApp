@@ -3,6 +3,8 @@ import 'package:uuid/uuid.dart';
 import '../models/task.dart';
 import '../services/auth_service.dart';
 import '../services/task_service.dart';
+import '../screens/friends_screen.dart';
+import '../screens/leaderboard_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,157 +56,122 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _showAddTaskDialog() {
+    bool isWeeklyTask = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Add New Task',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text(
+            'Add New Task',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(),
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Task Name',
+                    border: OutlineInputBorder(),
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description (optional)',
+                    border: OutlineInputBorder(),
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                  ),
+                  maxLines: 3,
                 ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedDifficulty,
-                decoration: const InputDecoration(
-                  labelText: 'Difficulty',
-                  border: OutlineInputBorder(),
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                const SizedBox(height: 24),
+                const Text(
+                  'Timeframe:',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                items: ['easy', 'medium', 'hard'].map((difficulty) {
-                  return DropdownMenuItem(
-                    value: difficulty,
-                    child: Text(
-                      difficulty[0].toUpperCase() + difficulty.substring(1),
-                      style: TextStyle(
-                        color: _getDifficultyColor(difficulty),
-                        fontWeight: FontWeight.w500,
-                      ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Today'),
+                      selected: !isWeeklyTask,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => isWeeklyTask = false);
+                        }
+                      },
                     ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() => _selectedDifficulty = value!);
-                },
-              ),
-              const SizedBox(height: 16),
-              InkWell(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) {
-                    setState(() => _selectedDate = date);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[400]!),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today, color: Colors.grey[600]),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Due Date',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    const SizedBox(width: 12),
+                    ChoiceChip(
+                      label: const Text('This Week'),
+                      selected: isWeeklyTask,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => isWeeklyTask = true);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _resetForm();
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            ],
-          ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (_titleController.text.isNotEmpty) {
+                  final task = Task(
+                    id: const Uuid().v4(),
+                    title: _titleController.text,
+                    description: _descriptionController.text,
+                    isWeeklyTask: isWeeklyTask,
+                    userId: _authService.currentUser!.uid,
+                  );
+                  _taskService.createTask(task);
+                  _resetForm();
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Add Task',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _resetForm();
-            },
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_titleController.text.isNotEmpty) {
-                final task = Task(
-                  id: const Uuid().v4(),
-                  title: _titleController.text,
-                  description: _descriptionController.text,
-                  dueDate: _selectedDate,
-                  userId: _authService.currentUser!.uid,
-                  difficulty: _selectedDifficulty,
-                );
-                _taskService.createTask(task);
-                _resetForm();
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
-            ),
-            child: const Text(
-              'Add Task',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -212,10 +179,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _resetForm() {
     _titleController.clear();
     _descriptionController.clear();
-    setState(() {
-      _selectedDate = DateTime.now();
-      _selectedDifficulty = 'easy';
-    });
   }
 
   Color _getDifficultyColor(String difficulty) {
@@ -322,10 +285,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     filteredTasks.sort((a, b) {
       if (showCompleted) {
         // For completed tasks, show most recently completed first
-        return (b.completedAt ?? b.dueDate).compareTo(a.completedAt ?? a.dueDate);
+        return (b.completedAt ?? b.createdAt).compareTo(a.completedAt ?? a.createdAt);
       } else {
-        // For current tasks, show closest due date first
-        return a.dueDate.compareTo(b.dueDate);
+        // For current tasks, show most recently created first
+        return b.createdAt.compareTo(a.createdAt);
       }
     });
 
@@ -409,34 +372,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _getDifficultyColor(task.difficulty)
-                            .withOpacity(0.1),
+                        color: task.isWeeklyTask ? Colors.blue.withOpacity(0.1) : Colors.green.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: _getDifficultyColor(task.difficulty)
-                              .withOpacity(0.5),
+                          color: task.isWeeklyTask ? Colors.blue.withOpacity(0.5) : Colors.green.withOpacity(0.5),
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '${task.difficulty[0].toUpperCase()}${task.difficulty.substring(1)}',
+                            task.isWeeklyTask ? 'Weekly' : 'Daily',
                             style: TextStyle(
-                              color: _getDifficultyColor(task.difficulty),
+                              color: task.isWeeklyTask ? Colors.blue : Colors.green,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${task.points} pts',
-                            style: TextStyle(
-                              color: _getDifficultyColor(task.difficulty),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                          if (task.points > 0) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              '${task.points} pts',
+                              style: TextStyle(
+                                color: task.isWeeklyTask ? Colors.blue : Colors.green,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -444,19 +407,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     Icon(
                       Icons.calendar_today,
                       size: 14,
-                      color: task.dueDate.isBefore(DateTime.now())
-                          ? Colors.red[400]
-                          : Colors.grey[600],
+                      color: Colors.grey[600],
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${task.dueDate.year}-${task.dueDate.month.toString().padLeft(2, '0')}-${task.dueDate.day.toString().padLeft(2, '0')}',
+                      '${task.createdAt.year}-${task.createdAt.month.toString().padLeft(2, '0')}-${task.createdAt.day.toString().padLeft(2, '0')}',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: task.dueDate.isBefore(DateTime.now())
-                            ? Colors.red[400]
-                            : Colors.grey[600],
+                        color: Colors.grey[600],
                       ),
                     ),
                   ],
@@ -526,6 +485,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.people_outline, color: Colors.black54),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FriendsScreen()),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.leaderboard_outlined, color: Colors.black54),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const LeaderboardScreen()),
+            ),
+          ),
           IconButton(
             icon: Icon(Icons.logout, color: Colors.black54),
             onPressed: () => _authService.signOut(),

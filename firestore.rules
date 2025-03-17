@@ -3,9 +3,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /tasks/{taskId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.isPublic == true
+      );
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        (resource.data.isPublic == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'finalDifficulty', 'votingClosed', 'points']))
+      );
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
   }
 } 
