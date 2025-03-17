@@ -524,101 +524,71 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
       ),
     );
 
-    // Calculate vote distributions
-    Map<String, int> voteCounts = {
-      'easy': 0,
-      'medium': 0,
-      'hard': 0,
-    };
-
-    for (var vote in task.votes) {
-      voteCounts[vote.difficulty.toLowerCase()] = 
-          (voteCounts[vote.difficulty.toLowerCase()] ?? 0) + 1;
-    }
-
-    final totalVotes = task.votes.length;
-
-    if (hasVoted || totalVotes > 0) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: hasVoted ? _getDifficultyColor(userVote.difficulty).withOpacity(0.1) : Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: hasVoted ? _getDifficultyColor(userVote.difficulty).withOpacity(0.3) : Colors.grey[300]!,
+    // If voting is closed, show the final result
+    if (task.votingClosed) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _getDifficultyColor(task.finalDifficulty).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _getDifficultyColor(task.finalDifficulty).withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              size: 18,
+              color: _getDifficultyColor(task.finalDifficulty),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Final Difficulty: ${task.finalDifficulty[0].toUpperCase() + task.finalDifficulty.substring(1)}',
+              style: TextStyle(
+                color: _getDifficultyColor(task.finalDifficulty),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasVoted) Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.how_to_vote,
-                      size: 18,
-                      color: _getDifficultyColor(userVote.difficulty),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'You voted ${userVote.difficulty[0].toUpperCase() + userVote.difficulty.substring(1)}',
-                      style: TextStyle(
-                        color: _getDifficultyColor(userVote.difficulty),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                if (totalVotes > 0) ...[
-                  if (hasVoted) const SizedBox(height: 12),
-                  Text(
-                    'Vote Distribution (Total: $totalVotes)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[700],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...['easy', 'medium', 'hard'].map((difficulty) {
-                    final count = voteCounts[difficulty] ?? 0;
-                    final percentage = totalVotes > 0 ? (count / totalVotes * 100).round() : 0;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${difficulty[0].toUpperCase() + difficulty.substring(1)}: $count ($percentage%)',
-                          style: TextStyle(
-                            color: _getDifficultyColor(difficulty),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: percentage / 100,
-                            backgroundColor: _getDifficultyColor(difficulty).withOpacity(0.1),
-                            valueColor: AlwaysStoppedAnimation<Color>(_getDifficultyColor(difficulty)),
-                            minHeight: 8,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
+    // If user has voted but voting is still open
+    if (hasVoted) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _getDifficultyColor(userVote.difficulty).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _getDifficultyColor(userVote.difficulty).withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.how_to_vote,
+              size: 18,
+              color: _getDifficultyColor(userVote.difficulty),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'You voted ${userVote.difficulty[0].toUpperCase() + userVote.difficulty.substring(1)}',
+              style: TextStyle(
+                color: _getDifficultyColor(userVote.difficulty),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // If user hasn't voted and voting is still open
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: ['easy', 'medium', 'hard'].map((difficulty) {

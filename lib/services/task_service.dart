@@ -99,96 +99,80 @@ class TaskService {
       
       final updatedVotes = [...task.votes, vote];
       
-      // Get friend count for task owner
-      final friendService = FriendService();
-      final friendCount = (await friendService.getFriends(task.userId).first).length;
-      final requiredVotes = friendCount > 0 ? friendCount : 1;  // If no friends, only need 1 vote
-      
-      print('Friend count: $friendCount, Required votes: $requiredVotes, Current votes: ${updatedVotes.length}');
-      
       // Create a batch to update both task and user documents
       final batch = _firestore.batch();
       final taskRef = _firestore.collection('tasks').doc(taskId);
       
-      // If we have enough votes, calculate final difficulty and points
-      if (updatedVotes.length >= requiredVotes) {
-        // Count votes for each difficulty
-        Map<String, int> voteCounts = {
-          'easy': 0,
-          'medium': 0,
-          'hard': 0,
-        };
-        
-        for (var v in updatedVotes) {
-          voteCounts[v.difficulty.toLowerCase()] = 
-              (voteCounts[v.difficulty.toLowerCase()] ?? 0) + 1;
-        }
-        
-        // Find the difficulty with the most votes
-        String finalDifficulty = voteCounts.entries
-            .reduce((a, b) => a.value > b.value ? a : b)
-            .key;
-            
-        // Calculate points based on difficulty
-        int points = 0;
-        if (task.isCompleted) {
-          switch (finalDifficulty) {
-            case 'easy':
-              points = 10;
-              break;
-            case 'medium':
-              points = 20;
-              break;
-            case 'hard':
-              points = 30;
-              break;
-          }
-        }
-        
-        print('Final difficulty: $finalDifficulty, Points: $points');
-        
-        // Calculate potential points based on difficulty (even if not completed yet)
-        int potentialPoints = 0;
-        switch (finalDifficulty) {
-          case 'easy':
-            potentialPoints = 10;
-            break;
-          case 'medium':
-            potentialPoints = 20;
-            break;
-          case 'hard':
-            potentialPoints = 30;
-            break;
-        }
-        
-        batch.update(taskRef, {
-          'votes': updatedVotes.map((v) => v.toMap()).toList(),
-          'finalDifficulty': finalDifficulty,
-          'votingClosed': true,
-          'points': task.isCompleted ? points : potentialPoints,
+      // Calculate final difficulty and points after one vote
+      String finalDifficulty = vote.difficulty.toLowerCase();
+      int potentialPoints = Task.calculatePoints(finalDifficulty);
+      
+      print('Final difficulty: $finalDifficulty, Potential points: $potentialPoints');
+      
+      batch.update(taskRef, {
+        'votes': updatedVotes.map((v) => v.toMap()).toList(),
+        'finalDifficulty': finalDifficulty,
+        'votingClosed': true,
+        'points': task.isCompleted ? potentialPoints : potentialPoints,
+      });
+      
+      // If task is completed, update user's points
+      if (task.isCompleted && potentialPoints > 0) {
+        final userRef = _firestore.collection('users').doc(task.userId);
+        batch.update(userRef, {
+          'totalPoints': FieldValue.increment(potentialPoints),
+          'lastUpdated': FieldValue.serverTimestamp(),
         });
-        
-        // If task is completed, update user's points
-        if (task.isCompleted && points > 0) {
-          final userRef = _firestore.collection('users').doc(task.userId);
-          batch.update(userRef, {
-            'totalPoints': FieldValue.increment(points),
-            'lastUpdated': FieldValue.serverTimestamp(),
-          });
-        }
-        
-        print('Voting closed with final difficulty: $finalDifficulty, points: $points, potential points: $potentialPoints');
-      } else {
-        batch.update(taskRef, {
-          'votes': updatedVotes.map((v) => v.toMap()).toList(),
-        });
-        print('Vote added, waiting for more votes');
       }
+      
+      print('Voting closed with final difficulty: $finalDifficulty, points: $potentialPoints');
       
       // Commit all updates atomically
       await batch.commit();
     } catch (e) {
       print('Error adding vote to task: $e');
+      throw e;
+    }
+  }
+
+  // Close voting and accept current difficulty
+  Future<void> acceptCurrentDifficulty(String taskId) async {
+    try {
+      final taskDoc = await _firestore.collection('tasks').doc(taskId).get();
+      if (!taskDoc.exists) throw Exception('Task not found');
+
+      final task = Task.fromMap({...taskDoc.data()!, 'id': taskDoc.id});
+      
+      if (task.votes.isEmpty) {
+        throw Exception('No votes available to accept');
+      }
+
+      // Calculate final difficulty based on current votes
+      String finalDifficulty = task.calculateFinalDifficulty();
+      int potentialPoints = Task.calculatePoints(finalDifficulty);
+      
+      // Create a batch to update task
+      final batch = _firestore.batch();
+      final taskRef = _firestore.collection('tasks').doc(taskId);
+      
+      batch.update(taskRef, {
+        'finalDifficulty': finalDifficulty,
+        'votingClosed': true,
+        'points': task.isCompleted ? potentialPoints : potentialPoints,
+      });
+      
+      // If task is completed, update user's points
+      if (task.isCompleted && potentialPoints > 0) {
+        final userRef = _firestore.collection('users').doc(task.userId);
+        batch.update(userRef, {
+          'totalPoints': FieldValue.increment(potentialPoints),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      await batch.commit();
+    } catch (e) {
+      print('Error accepting current difficulty: $e');
       throw e;
     }
   }

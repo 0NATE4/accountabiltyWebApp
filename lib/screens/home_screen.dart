@@ -23,6 +23,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   late TabController _tabController;
   int _lastKnownPoints = 0;
   
+  Color _getDifficultyColor(String difficulty) {
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+        return Colors.green;
+      case 'medium':
+        return Colors.orange;
+      case 'hard':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -181,19 +194,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _descriptionController.clear();
   }
 
-  Color _getDifficultyColor(String difficulty) {
-    switch (difficulty.toLowerCase()) {
-      case 'easy':
-        return Colors.green;
-      case 'medium':
-        return Colors.orange;
-      case 'hard':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   Widget _buildPointsBar(int points) {
     const int weeklyGoal = 1000; // Adjust this value as needed
     final double progress = (points / weeklyGoal).clamp(0.0, 1.0);
@@ -324,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       itemBuilder: (context, index) {
         final task = filteredTasks[index];
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -336,136 +336,237 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ],
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 12,
-            ),
-            title: Text(
-              task.title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                color: task.isCompleted ? Colors.grey : Colors.black87,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task.title,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                          color: task.isCompleted ? Colors.grey : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!showCompleted)
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Transform.scale(
+                          scale: 1.2,
+                          child: Checkbox(
+                            value: task.isCompleted,
+                            onChanged: (value) async {
+                              print('Checkbox changed to: $value');
+                              task.markCompleted(value!);
+                              await _taskService.updateTaskStatus(task.id, value);
+                              if (value) {
+                                _tabController.animateTo(1);
+                              }
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            activeColor: Colors.green,
+                          ),
+                        ),
+                      ),
+                    SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Colors.red[300],
+                        ),
+                        onPressed: () => _taskService.deleteTask(task.id),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (task.description.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
+              if (task.description.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
                     task.description,
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],
                     ),
                   ),
-                ],
-                const SizedBox(height: 12),
-                Row(
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: task.isWeeklyTask ? Colors.blue.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: task.isWeeklyTask ? Colors.blue.withOpacity(0.5) : Colors.green.withOpacity(0.5),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            task.isWeeklyTask ? 'Weekly' : 'Daily',
-                            style: TextStyle(
-                              color: task.isWeeklyTask ? Colors.blue : Colors.green,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (task.points > 0) ...[
-                            const SizedBox(width: 4),
-                            Text(
-                              '${task.points} pts',
-                              style: TextStyle(
-                                color: task.isWeeklyTask ? Colors.blue : Colors.green,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    _buildTaskBadge(
+                      text: task.isWeeklyTask ? 'Weekly' : 'Daily',
+                      points: task.points,
+                      color: task.isWeeklyTask ? Colors.blue : Colors.green,
                     ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${task.createdAt.year}-${task.createdAt.month.toString().padLeft(2, '0')}-${task.createdAt.day.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[600],
-                      ),
-                    ),
+                    if (!task.votingClosed && task.votes.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _buildVotingBadge(task, context),
+                    ],
+                    if (task.votingClosed) ...[
+                      const SizedBox(height: 8),
+                      _buildDifficultyBadge(task),
+                    ],
                   ],
                 ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!showCompleted) ...[
-                  Transform.scale(
-                    scale: 1.2,
-                    child: Checkbox(
-                      value: task.isCompleted,
-                      onChanged: (value) async {
-                        print('Checkbox changed to: $value');
-                        print('Before update - Task ${task.title}: isCompleted=${task.isCompleted}, completedAt=${task.completedAt}');
-                        
-                        // Update the task's completion status locally first
-                        task.markCompleted(value!);
-                        print('After local update - Task ${task.title}: isCompleted=${task.isCompleted}, completedAt=${task.completedAt}');
-                        
-                        // Then update in Firestore
-                        await _taskService.updateTaskStatus(task.id, value);
-                        print('After Firestore update - Task ${task.title} marked as completed');
-                        
-                        // If task is completed, switch to completed tab
-                        if (value) {
-                          _tabController.animateTo(1);
-                        }
-                      },
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      activeColor: Colors.green,
-                    ),
-                  ),
-                ],
-                IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: Colors.red[300],
-                  ),
-                  onPressed: () => _taskService.deleteTask(task.id),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTaskBadge({
+    required String text,
+    required int points,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (points > 0) ...[
+            const SizedBox(width: 8),
+            Text(
+              '$points pts',
+              style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVotingBadge(Task task, BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.orange.withOpacity(0.5),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '${task.votes.length} vote${task.votes.length == 1 ? '' : 's'}',
+            style: const TextStyle(
+              color: Colors.orange,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await _taskService.acceptCurrentDifficulty(task.id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Accepted current difficulty'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.orange.withOpacity(0.2),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              minimumSize: const Size(120, 36),
+            ),
+            child: const Text(
+              'Accept Difficulty',
+              style: TextStyle(
+                color: Colors.orange,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDifficultyBadge(Task task) {
+    final color = _getDifficultyColor(task.finalDifficulty);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.5),
+        ),
+      ),
+      child: Wrap(
+        children: [
+          Text(
+            task.finalDifficulty[0].toUpperCase() + task.finalDifficulty.substring(1),
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
